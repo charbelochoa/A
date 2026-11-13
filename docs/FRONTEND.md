@@ -30,6 +30,8 @@ El código incluye estados de carga, errores de acceso, conexión o caducidad de
 
 Los enlaces de acceso móvil y escritorio se construyen con la misma ruta base del sitio. Los enlaces, fuentes e imágenes estáticos reciben el prefijo `/A/` durante la preparación de Pages. Los comprobantes se descargan mediante la API autenticada.
 
+La navegación de teléfono usa una isla flotante inspirada en `src/DynamicIsland.tsx` y `src/interface.css` del proyecto AERIS del usuario: superficie oscura, borde fino, esquinas redondeadas y sombra separada del contenido. Mantiene los cinco accesos de la banca, indica la sección activa y respeta el área segura inferior. Incluye variantes de contraste y transparencia reducida y controles accesibles mediante teclado.
+
 ## Variantes
 
 `main` presenta el portal institucional. La variante `mobile` conserva el mismo código y cambia `channel.json` a `{"default":"mobile"}`. Al preparar esa variante, la entrada principal lleva a la interfaz `/app/`; la API y sus reglas se comparten entre ambos canales. La publicación automática de este repositorio permanece vinculada a `main`.
