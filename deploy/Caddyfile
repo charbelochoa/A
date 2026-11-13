@@ -1,0 +1,14 @@
+aluranee-api.136-118-8-128.sslip.io {
+    encode zstd gzip
+    header -Server
+    request_body {
+        max_size 32KB
+    }
+    @private path /api/host/*
+    @bank path /api/* /archivo/* /mobile/* /robots.txt
+    route {
+        respond @private 404
+        reverse_proxy @bank 127.0.0.1:8105
+        respond 404
+    }
+}

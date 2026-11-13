@@ -1,0 +1,34 @@
+[Unit]
+Description=Aluranee Bank API
+After=network.target
+
+[Service]
+Type=simple
+User=aluranee
+Group=aluranee
+WorkingDirectory=/opt/aluranee/current
+EnvironmentFile=/etc/aluranee/runtime.env
+ExecStart=/opt/aluranee/venv/bin/uvicorn server.app:app --host 127.0.0.1 --port 8105 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1 --limit-concurrency 48 --timeout-keep-alive 5
+Restart=on-failure
+RestartSec=5
+StateDirectory=aluranee
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+MemoryMax=220M
+TasksMax=48
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
