@@ -14,3 +14,4 @@ playwright-report/
 ARQUITECTURA.md
 tests/
 scripts/browser_check.py
+requirements-dev.txt
