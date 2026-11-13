@@ -16,13 +16,24 @@ const paths = {arrow: 'M4 12h16m-6-6 6 6-6 6', home: 'm3 10 9-7 9 7v11h-7v-7h-4v
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.arrow}"/></svg>`;
 const brand = (link = '/') => `<a class="brand" href="${site(link)}" aria-label="Aluranee Bank, inicio"><img src="/assets/seal.webp" alt="" width="62" height="62"><span>Aluranee<span class="brand-bank">Bank</span></span></a>`;
 
+class ApiError extends Error {
+  constructor(message, status = 0) { super(message); this.status = status; }
+}
+
 async function api(path, options = {}) {
   const {download, ...requestOptions} = options;
   const headers = {'Content-Type': 'application/json', ...options.headers};
   if (state.csrf) headers['X-CSRF-Token'] = state.csrf;
   const token = sessionStorage.getItem(sessionKey);
   if (token) headers['X-Session-Token'] = token;
-  const response = await fetch(`${apiOrigin}/api${path}`, {...requestOptions, headers, credentials: apiOrigin ? 'omit' : 'same-origin'});
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  let response;
+  try {
+    response = await fetch(`${apiOrigin}/api${path}`, {...requestOptions, headers, signal: controller.signal, credentials: apiOrigin ? 'omit' : 'same-origin'});
+  } catch (error) {
+    throw new ApiError(error.name === 'AbortError' ? 'La conexión tardó más de lo esperado. Intenta de nuevo.' : 'No pudimos conectar con tu banca. Revisa tu conexión e intenta de nuevo.');
+  } finally { clearTimeout(timeout); }
   if (download && response.ok) {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement('a'); link.href = url; link.download = download; link.click();
@@ -34,7 +45,7 @@ async function api(path, options = {}) {
     if (response.status === 401) sessionStorage.removeItem(sessionKey);
     const message = typeof data.detail === 'string' ? data.detail : 'Revisa los datos e intenta de nuevo.';
     if (response.status === 401 && state.user) { state.user = null; state.csrf = ''; location.href = site(mobile ? '/app' : '/acceso'); }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
   if (data.session_token) sessionStorage.setItem(sessionKey, data.session_token);
   if (path === '/auth/logout') sessionStorage.removeItem(sessionKey);
@@ -51,6 +62,7 @@ function notify(message) {
 
 function dialog(content) {
   modal.innerHTML = `<button class="dialog-close icon-button" data-close aria-label="Cerrar">${icon('close')}</button>${content}`;
+  modal.setAttribute('aria-label', modal.querySelector('h2')?.textContent || 'Aluranee Bank');
   modal.showModal();
   modal.querySelector('[data-close]').onclick = () => modal.close();
 }
@@ -86,7 +98,8 @@ function landing() {
 
 function auth(register = false) {
   document.body.className = mobile ? 'mobile auth-mobile' : 'public';
-  root.innerHTML = `${mobile ? '' : publicHeader()}<main id="main" class="auth-layout"><div class="auth-image"><img src="/assets/portrait.webp" alt="Atención personal Aluranee Bank"><div><h2>La tranquilidad<br>de estar en casa.</h2><span>ALURANEE BANK</span></div></div><div class="auth-panel">${mobile ? brand('/app') : '<a class="back-link" href="/">← Volver a Aluranee</a>'}<span class="section-number">${mobile ? 'ALURANEE MÓVIL' : 'BANCA EN LÍNEA'}</span><h1>${register ? 'Tu nueva etapa.' : 'Bienvenido a casa.'}</h1><form id="auth-form">${register ? '<label>Nombre ficticio<input name="name" autocomplete="nickname" minlength="3" maxlength="70" required></label>' : ''}<label>Identificador<input name="email" type="email" autocomplete="username" placeholder="equipo@aluranee.invalid" maxlength="120" required></label><label>Contraseña<div class="password-input"><input name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" ${register ? 'minlength="15"' : ''} maxlength="128" required><button type="button" class="icon-button" id="show-password" aria-label="Mostrar contraseña">${icon('eye')}</button></div></label>${register ? '<p class="field-note">Mínimo 15 caracteres. Usa datos ficticios.</p>' : ''}<p class="form-error" id="form-error" role="alert"></p><button class="button full" type="submit">${register ? 'Abrir cuenta' : 'Ingresar'} ${icon('arrow')}</button></form><p class="auth-switch">${register ? '¿Ya eres cliente?' : '¿Tu primera vez en Aluranee?'} <a href="${mobile ? (register ? '/app' : '/app/registro') : (register ? '/acceso' : '/registro')}">${register ? 'Inicia sesión' : 'Abre tu cuenta'}</a></p><div class="auth-security">${icon('lock')}<span>Conexión privada. Banca de confianza.</span></div><span class="simulation-note">Entorno académico · Usa datos ficticios</span></div></main>`;
+  document.title = (register ? 'Abrir cuenta' : 'Acceso a banca') + ' · Aluranee Bank';
+  root.innerHTML = `${mobile ? '' : publicHeader()}<main id="main" class="auth-layout"><div class="auth-image"><img src="/assets/portrait.webp" alt="Atención personal Aluranee Bank"><div><h2>La tranquilidad<br>de estar en casa.</h2><span>ALURANEE BANK</span></div></div><div class="auth-panel">${mobile ? brand('/app') : '<a class="back-link" href="/">← Volver a Aluranee</a>'}<span class="section-number">${mobile ? 'ALURANEE MÓVIL' : 'BANCA EN LÍNEA'}</span><h1>${register ? 'Tu nueva etapa.' : 'Bienvenido a casa.'}</h1><form id="auth-form">${register ? '<label>Nombre ficticio<input name="name" autocomplete="nickname" minlength="3" maxlength="70" required></label>' : ''}<label>Identificador<input name="email" type="email" autocomplete="username" placeholder="equipo@aluranee.invalid" maxlength="120" required></label><label>Contraseña<div class="password-input"><input name="password" type="password" autocomplete="${register ? 'new-password' : 'current-password'}" ${register ? 'minlength="15"' : ''} maxlength="128" required><button type="button" class="icon-button" id="show-password" aria-label="Mostrar contraseña">${icon('eye')}</button></div></label>${register ? '<p class="field-note">Mínimo 15 caracteres. Usa datos ficticios.</p>' : ''}<p class="form-error" id="form-error" role="alert"></p><button class="button full" type="submit">${register ? 'Abrir cuenta' : 'Ingresar'} ${icon('arrow')}</button></form><p class="auth-switch">${register ? '¿Ya eres cliente?' : '¿Tu primera vez en Aluranee?'} <a href="${site(mobile ? (register ? '/app' : '/app/registro') : (register ? '/acceso' : '/registro'))}">${register ? 'Inicia sesión' : 'Abre tu cuenta'}</a></p><div class="auth-security">${icon('lock')}<span>Conexión privada. Banca de confianza.</span></div><span class="simulation-note">Entorno académico · Usa datos ficticios</span></div></main>`;
   bindPublic();
   document.querySelector('#show-password').onclick = event => {
     const input = document.querySelector('[name=password]');
@@ -109,11 +122,13 @@ const navigation = [['', 'home', 'Inicio'], ['/cuentas', 'accounts', 'Mis cuenta
 
 function shell(title, active, content) {
   document.body.className = mobile ? 'mobile banking' : 'banking';
+  document.title = title.replace(/[.]$/, '') + ' · Aluranee Bank';
   const initials = state.user.name.split(' ').slice(0, 2).map(s => s[0]).join('');
-  root.innerHTML = `<aside class="sidebar">${brand(base)}<div class="sidebar-caption">BANCA EN LÍNEA</div><nav aria-label="Banca personal">${navigation.map(([path, symbol, label]) => `<a class="${active === path ? 'active' : ''}" href="${base}${path}">${icon(symbol)}<span>${label}</span>${icon('chevron', 'nav-chevron')}</a>`).join('')}</nav><div class="sidebar-bottom"><a href="/movil">${icon('card')}Aluranee Móvil</a><span>Entorno académico</span></div></aside><div class="bank-main"><header class="bank-header"><a class="mobile-brand" href="${base}">Aluranee<span>Bank</span></a><span class="bank-header-label">BANCA PERSONAL</span><div class="user-tools"><a href="${base}/perfil" class="profile-link"><span>${esc(state.user.name)}</span><span class="avatar">${esc(initials)}</span></a><button class="icon-button" id="logout" aria-label="Cerrar sesión">${icon('logout')}</button></div></header><main id="main" class="bank-content"><div class="page-title"><div><span class="section-number">ALURANEE BANK</span><h1>${title}</h1></div><span class="today">${date(Date.now() / 1000)}</span></div>${content}</main><footer class="bank-footer"><span>Aluranee Bank</span><span>Operaciones simuladas · MXN</span></footer></div>${mobile ? `<nav class="bottom-nav" aria-label="Navegación móvil">${[['', 'home', 'Inicio'], ['/cuentas', 'accounts', 'Cuentas'], ['/transferir', 'transfer', 'Transferir'], ['/tarjetas', 'card', 'Tarjetas'], ['/mas', 'menu', 'Más']].map(([p, i, l]) => `<a href="/app${p}" class="${active === p ? 'active' : ''}">${icon(i)}<span>${l}</span></a>`).join('')}</nav>` : ''}`;
+  root.innerHTML = `<aside class="sidebar">${brand(base)}<div class="sidebar-caption">BANCA EN LÍNEA</div><nav aria-label="Banca personal">${navigation.map(([path, symbol, label]) => `<a class="${active === path ? 'active' : ''}" href="${base}${path}" ${active === path ? 'aria-current="page"' : ''}>${icon(symbol)}<span>${label}</span>${icon('chevron', 'nav-chevron')}</a>`).join('')}</nav><div class="sidebar-bottom"><a href="/movil">${icon('card')}Aluranee Móvil</a><span>Entorno académico</span></div></aside><div class="bank-main"><header class="bank-header"><button class="bank-menu icon-button" id="bank-menu" aria-label="Abrir navegación de banca" aria-haspopup="dialog">${icon('menu')}</button><a class="mobile-brand" href="${base}">Aluranee<span>Bank</span></a><span class="bank-header-label">BANCA PERSONAL</span><div class="user-tools"><a href="${base}/perfil" class="profile-link" aria-label="Mi perfil"><span>${esc(state.user.name)}</span><span class="avatar">${esc(initials)}</span></a><button class="icon-button" id="logout" aria-label="Cerrar sesión">${icon('logout')}</button></div></header><main id="main" class="bank-content"><div class="page-title"><div><span class="section-number">ALURANEE BANK</span><h1>${title}</h1></div><span class="today">${date(Date.now() / 1000)}</span></div>${content}</main><footer class="bank-footer"><span>Aluranee Bank</span><span>Operaciones simuladas · MXN</span></footer></div>${mobile ? `<nav class="bottom-nav" aria-label="Navegación móvil">${[['', 'home', 'Inicio'], ['/cuentas', 'accounts', 'Cuentas'], ['/transferir', 'transfer', 'Transferir'], ['/tarjetas', 'card', 'Tarjetas'], ['/mas', 'menu', 'Más']].map(([p, i, l]) => `<a href="/app${p}" class="${active === p ? 'active' : ''}">${icon(i)}<span>${l}</span></a>`).join('')}</nav>` : ''}`;
   document.querySelector('#logout').onclick = async () => {
     try { await api('/auth/logout', {method: 'POST'}); location.href = site(mobile ? '/app' : '/'); } catch (error) { notify(error.message); }
   };
+  document.querySelector('#bank-menu').onclick = () => dialog(`<h2>Tu banca.</h2><nav class="bank-dialog-nav" aria-label="Navegación de cuentas">${navigation.map(([path, symbol, label]) => `<a href="${base}${path}" ${active === path ? 'aria-current="page"' : ''}>${icon(symbol)}${label}${icon('chevron')}</a>`).join('')}<a href="${base}/perfil">${icon('user')}Mi perfil${icon('chevron')}</a><a href="${site('/ayuda')}">${icon('support')}Centro de ayuda${icon('chevron')}</a></nav>`);
 }
 
 function movementTable(items) {
@@ -140,7 +155,14 @@ async function transactionsPage() {
   const account = query.get('account') || '';
   shell('Tus movimientos.', '/movimientos', `<section class="panel"><form id="movement-filters" class="filters"><label>Cuenta<select name="account"><option value="">Todas mis cuentas</option>${state.overview.accounts.map(a => `<option value="${a.id}" ${account === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label><label>Buscar operación<div class="search-input"><input name="q" placeholder="Concepto del movimiento" maxlength="80">${icon('search')}</div></label><button class="button" type="submit">Buscar</button></form><div id="movement-results" aria-live="polite"></div><div class="pagination"><span id="result-count"></span><div><button class="text-link" id="prev-page">Anterior</button><button class="text-link" id="next-page">Siguiente ${icon('arrow')}</button></div></div></section>`);
   const form = document.querySelector('#movement-filters');
+  let loading = false;
   async function load() {
+    if (loading) return;
+    loading = true;
+    document.querySelector('#prev-page').disabled = true;
+    document.querySelector('#next-page').disabled = true;
+    form.querySelector('[type=submit]').disabled = true;
+    document.querySelector('#movement-results').setAttribute('aria-busy', 'true');
     const params = new URLSearchParams(new FormData(form)); params.set('page', state.page);
     try {
       const result = await api('/transactions?' + params);
@@ -148,19 +170,30 @@ async function transactionsPage() {
       document.querySelector('#result-count').textContent = `${result.total} movimientos · Página ${state.page}`;
       document.querySelector('#prev-page').disabled = state.page <= 1;
       document.querySelector('#next-page').disabled = state.page * 15 >= result.total;
-    } catch (error) { notify(error.message); }
+    } catch (error) {
+      document.querySelector('#movement-results').innerHTML = `<div class="empty-state"><p>${esc(error.message)}</p><button class="text-link" id="retry-movements">Intentar de nuevo</button></div>`;
+      document.querySelector('#retry-movements').onclick = load;
+    } finally {
+      loading = false;
+      form.querySelector('[type=submit]').disabled = false;
+      document.querySelector('#movement-results').setAttribute('aria-busy', 'false');
+    }
   }
-  form.onsubmit = event => { event.preventDefault(); state.page = 1; load(); };
-  document.querySelector('#prev-page').onclick = () => { state.page--; load(); };
-  document.querySelector('#next-page').onclick = () => { state.page++; load(); };
+  form.onsubmit = event => { event.preventDefault(); if (!loading) { state.page = 1; load(); } };
+  document.querySelector('#prev-page').onclick = () => { if (!loading) { state.page--; load(); } };
+  document.querySelector('#next-page').onclick = () => { if (!loading) { state.page++; load(); } };
   await load();
 }
 
 async function transferPage() {
   const beneficiaries = await api('/beneficiaries'); state.beneficiaries = beneficiaries;
   const accounts = state.overview.accounts;
-  shell('Mueve lo que importa.', '/transferir', `<div class="transfer-layout"><section class="panel transfer-panel"><div class="step-indicator"><span class="current">01 <b>Datos</b></span><i></i><span>02 <b>Confirmación</b></span><i></i><span>03 <b>Comprobante</b></span></div><div id="transfer-stage"><h2>Nueva transferencia</h2><form id="transfer-form"><label>Cuenta de origen<select name="from_account">${accounts.map(a => `<option value="${a.id}">${esc(a.name)} · ${money(a.balance)}</option>`).join('')}</select></label><label>Cuenta de destino<select name="to_account"><optgroup label="Mis cuentas">${accounts.map(a => `<option value="${a.id}">${esc(a.name)} · ${a.clabe.slice(-4)}</option>`).join('')}</optgroup>${beneficiaries.items.length ? `<optgroup label="Beneficiarios">${beneficiaries.items.map(b => `<option value="${b.account_id}">${esc(b.alias)} · ${b.clabe.slice(-4)}</option>`).join('')}</optgroup>` : ''}</select></label><a class="small-link" href="${base}/beneficiarios">Administrar beneficiarios ${icon('plus')}</a><label>Importe<div class="money-input"><span>$</span><input name="amount" inputmode="decimal" placeholder="0.00" pattern="[0-9]+([.][0-9]{1,2})?" required><span>MXN</span></div></label><label>Concepto<input name="concept" placeholder="Concepto de la transferencia" minlength="2" maxlength="80" required></label><p class="form-error" id="transfer-error" role="alert"></p><button class="button full" type="submit">Continuar ${icon('arrow')}</button></form></div></section><aside class="transfer-aside"><img src="/assets/advisor.webp" alt="Asesor de Aluranee Bank"><h3>En cada movimiento,<br>tu tranquilidad.</h3><div>${icon('lock')}<span>Verifica la cuenta y el importe antes de confirmar.</span></div><p>Las operaciones de este entorno son simuladas.</p></aside></div>`);
+  shell('Mueve lo que importa.', '/transferir', `<div class="transfer-layout"><section class="panel transfer-panel"><div class="step-indicator"><span class="current">01 <b>Datos</b></span><i></i><span>02 <b>Confirmación</b></span><i></i><span>03 <b>Comprobante</b></span></div><div id="transfer-stage"><h2>Nueva transferencia</h2><form id="transfer-form"><label>Cuenta de origen<select name="from_account">${accounts.map(a => `<option value="${a.id}">${esc(a.name)} · ${money(a.balance)}</option>`).join('')}</select></label><label>Cuenta de destino<select name="to_account"><optgroup label="Mis cuentas">${accounts.map(a => `<option value="${a.id}">${esc(a.name)} · ${a.clabe.slice(-4)}</option>`).join('')}</optgroup>${beneficiaries.items.length ? `<optgroup label="Beneficiarios">${beneficiaries.items.map(b => `<option value="${b.account_id}">${esc(b.alias)} · ${b.clabe.slice(-4)}</option>`).join('')}</optgroup>` : ''}</select></label><a class="small-link" href="${base}/beneficiarios">Administrar beneficiarios ${icon('plus')}</a><label>Importe<div class="money-input"><span>$</span><input name="amount" aria-label="Importe" inputmode="decimal" placeholder="0.00" pattern="[0-9]+([.][0-9]{1,2})?" required><span>MXN</span></div></label><label>Concepto<input name="concept" placeholder="Concepto de la transferencia" minlength="2" maxlength="80" required></label><p class="form-error" id="transfer-error" role="alert"></p><button class="button full" type="submit">Continuar ${icon('arrow')}</button></form></div></section><aside class="transfer-aside"><img src="/assets/advisor.webp" alt="Asesor de Aluranee Bank"><h3>En cada movimiento,<br>tu tranquilidad.</h3><div>${icon('lock')}<span>Verifica la cuenta y el importe antes de confirmar.</span></div><p>Las operaciones de este entorno son simuladas.</p></aside></div>`);
   document.querySelector('[name=to_account]').selectedIndex = 1;
+  if (state.transfer) {
+    for (const name of ['from_account', 'to_account', 'concept']) document.querySelector(`[name=${name}]`).value = state.transfer[name];
+    document.querySelector('[name=amount]').value = (state.transfer.amount / 100).toFixed(2);
+  }
   document.querySelector('#transfer-form').onsubmit = event => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
@@ -187,17 +220,21 @@ function confirmTransfer() {
     const button = event.currentTarget; button.disabled = true;
     try {
       const receipt = await api('/transfers', {method: 'POST', headers: {'Idempotency-Key': state.key}, body: JSON.stringify(t)});
-      document.querySelector('.step-indicator').children[2].classList.remove('current');
-      document.querySelector('.step-indicator').children[4].classList.add('current');
-      document.querySelector('#transfer-stage').innerHTML = `<div class="transfer-success"><div class="success-mark">${icon('check')}</div><h2>Transferencia aplicada.</h2><strong>${money(receipt.amount)}</strong><p>${esc(target.name || target.alias)}</p></div><dl class="receipt-facts"><div><dt>Referencia</dt><dd>${esc(receipt.reference)}</dd></div><div><dt>Fecha</dt><dd>${date(receipt.created_at)}</dd></div><div><dt>Concepto</dt><dd>${esc(receipt.concept)}</dd></div></dl><button class="button full" id="download-receipt">Descargar comprobante ${icon('download')}</button><a class="text-link centered" href="${base}">Volver al inicio</a>`;
-      document.querySelector('#download-receipt').onclick = async event => {
-        const downloadButton = event.currentTarget; downloadButton.disabled = true;
-        try { await api('/transfers/' + receipt.id + '/receipt', {download: 'comprobante-aluranee.txt'}); }
-        catch (error) { notify(error.message); }
-        finally { downloadButton.disabled = false; }
-      };
+      transferReceipt(receipt, target);
       state.overview = await api('/overview');
-    } catch (error) { document.querySelector('#transfer-error').textContent = error.message; button.disabled = false; }
+    } catch (error) { const feedback = document.querySelector('#transfer-error'); if (feedback) feedback.textContent = error.message; else notify(error.message); button.disabled = false; }
+  };
+}
+
+function transferReceipt(receipt, target) {
+  document.querySelector('.step-indicator').children[2].classList.remove('current');
+  document.querySelector('.step-indicator').children[4].classList.add('current');
+  document.querySelector('#transfer-stage').innerHTML = `<div class="transfer-success"><div class="success-mark">${icon('check')}</div><h2>Transferencia aplicada.</h2><strong>${money(receipt.amount)}</strong><p>${esc(target.name || target.alias)}</p></div><dl class="receipt-facts"><div><dt>Referencia</dt><dd>${esc(receipt.reference)}</dd></div><div><dt>Fecha</dt><dd>${date(receipt.created_at)}</dd></div><div><dt>Concepto</dt><dd>${esc(receipt.concept)}</dd></div></dl><button class="button full" id="download-receipt">Descargar comprobante ${icon('download')}</button><a class="text-link centered" href="${base}">Volver al inicio</a>`;
+  document.querySelector('#download-receipt').onclick = async event => {
+    const downloadButton = event.currentTarget; downloadButton.disabled = true;
+    try { await api('/transfers/' + receipt.id + '/receipt', {download: 'comprobante-aluranee.txt'}); }
+    catch (error) { notify(error.message); }
+    finally { downloadButton.disabled = false; }
   };
 }
 
@@ -207,8 +244,10 @@ async function beneficiariesPage() {
   document.querySelector('#directory').onchange = event => { document.querySelector('[name=clabe]').value = event.target.value; document.querySelector('[name=alias]').value = event.target.selectedOptions[0].textContent; };
   document.querySelector('#beneficiary-form').onsubmit = async event => {
     event.preventDefault();
+    const button = event.currentTarget.querySelector('button'); button.disabled = true;
     try { await api('/beneficiaries', {method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget)))}); await beneficiariesPage(); notify('Beneficiario guardado.'); }
     catch (error) { document.querySelector('#beneficiary-error').textContent = error.message; }
+    finally { button.disabled = false; }
   };
   document.querySelectorAll('.delete-beneficiary').forEach(button => button.onclick = () => {
     const id = button.dataset.id;
@@ -265,22 +304,31 @@ function informationPage(slug) {
   bindPublic(); bindPrivacy();
 }
 
+function missingPage() {
+  document.body.className = 'public';
+  document.title = 'Página no encontrada · Aluranee Bank';
+  root.innerHTML = `${publicHeader()}<main id="main" class="missing-page"><span class="section-number">404 · ALURANEE BANK</span><h1>Retomemos el camino.</h1><p>La página que buscas no está disponible. Puedes volver al inicio o consultar nuestro centro de ayuda.</p><div><a class="button" href="${site('/')}">Volver al inicio ${icon('arrow')}</a><a class="text-arrow" href="${site('/ayuda')}">Centro de ayuda ${icon('arrow')}</a></div></main>${footer()}`;
+  bindPublic();
+}
+
 async function start() {
+  if (routePath === '/' && config.defaultChannel === 'mobile') { location.replace(site('/app/')); return; }
   const informationSlug = routePath.slice(1);
-  if (window.ALURANEE_INFORMATION?.[informationSlug]) { informationPage(informationSlug); return; }
+  if (window.ALURANEE_INFORMATION && Object.hasOwn(window.ALURANEE_INFORMATION, informationSlug)) { informationPage(informationSlug); return; }
   if (routePath === '/') { landing(); return; }
   if (routePath === '/movil') { phonePreview(); return; }
   if (['/acceso', '/registro', '/app/registro'].includes(routePath)) { auth(routePath.includes('registro')); return; }
+  const bankingRoot = mobile ? '/app' : '/banca';
+  const route = routePath.slice(bankingRoot.length);
+  const pages = {'': dashboard, '/cuentas': accountsPage, '/movimientos': transactionsPage, '/transferir': transferPage, '/beneficiarios': beneficiariesPage, '/tarjetas': cardsPage, '/atencion': supportPage, '/perfil': profilePage, '/mas': morePage};
+  if (!(routePath === bankingRoot || routePath.startsWith(bankingRoot + '/')) || !Object.hasOwn(pages, route)) { missingPage(); return; }
   root.innerHTML = '<main id="main" class="loading"><div class="loading-seal"><img src="/assets/seal.webp" alt="Aluranee Bank"></div><p>Cargando tu banca…</p></main>';
   try {
     state.user = await api('/me'); state.csrf = state.user.csrf;
     state.overview = await api('/overview');
-    const route = routePath.slice((mobile ? '/app' : '/banca').length);
-    const pages = {'': dashboard, '/cuentas': accountsPage, '/movimientos': transactionsPage, '/transferir': transferPage, '/beneficiarios': beneficiariesPage, '/tarjetas': cardsPage, '/atencion': supportPage, '/perfil': profilePage, '/mas': morePage};
-    if (pages[route]) await pages[route]();
-    else { shell('Página no encontrada.', '', `<a class="button" href="${base}">Volver al inicio ${icon('arrow')}</a>`); }
+    await pages[route]();
   } catch (error) {
-    if (error.message.includes('sesión')) auth(false);
+    if (error.status === 401) auth(false);
     else { root.innerHTML = `<main id="main" class="loading"><h1>No pudimos abrir tu banca.</h1><p>${esc(error.message)}</p><a class="button" href="${base}">Intentar de nuevo</a></main>`; }
   }
 }

@@ -14,6 +14,9 @@ def main():
     parser.add_argument("--base", default="/A")
     parser.add_argument("--api", default="https://aluranee-api.136-118-8-128.sslip.io")
     args = parser.parse_args()
+    channel = json.loads((ROOT / 'channel.json').read_text(encoding='utf-8'))['default']
+    if channel not in ('web', 'mobile'):
+        parser.error('Canal de presentación no válido')
     base = args.base.rstrip("/")
     api = urlsplit(args.api)
     if not re.fullmatch(r"(?:/[A-Za-z0-9_-]+)*", base):
@@ -27,13 +30,11 @@ def main():
         source = (ROOT / "web" / filename).read_text(encoding="utf-8")
         source = source.replace('href="/', f'href="{base}/').replace('src="/', f'src="{base}/')
         source = source.replace("url('/", f"url('{base}/")
-        if filename == "app.js":
-            source = source.replace('href="${mobile ?', 'href="' + base + '${mobile ?')
         if filename == "index.html":
             policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' " + args.api.rstrip("/") + "; frame-src 'self'; base-uri 'none'; form-action 'self'; object-src 'none'"
             source = source.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<meta http-equiv="Content-Security-Policy" content="' + policy + '">\n<meta name="referrer" content="same-origin">')
         (output / filename).write_text(source, encoding="utf-8")
-    (output / "config.js").write_text("window.ALURANEE_CONFIG = " + json.dumps({"basePath": base, "apiOrigin": args.api.rstrip("/")}) + ";\n", encoding="utf-8")
+    (output / "config.js").write_text("window.ALURANEE_CONFIG = " + json.dumps({"basePath": base, "apiOrigin": args.api.rstrip("/"), "defaultChannel": channel}) + ";\n", encoding="utf-8")
     manifest = {"name": "Aluranee Bank", "short_name": "Aluranee", "start_url": base + "/app/", "scope": base + "/", "display": "standalone", "background_color": "#f3f1eb", "theme_color": "#102c43", "icons": [{"src": base + f"/assets/app-icon-{size}.png", "sizes": f"{size}x{size}", "type": "image/png"} for size in (192, 512)]}
     (output / "manifest.webmanifest").write_text(json.dumps(manifest), encoding="utf-8")
     (output / ".nojekyll").touch()

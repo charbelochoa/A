@@ -1,1 +1,1 @@
-window.ALURANEE_CONFIG = {basePath: '', apiOrigin: ''};
+window.ALURANEE_CONFIG = {basePath: '', apiOrigin: '', defaultChannel: 'web'};
