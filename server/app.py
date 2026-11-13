@@ -9,7 +9,9 @@ import sqlite3
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from urllib.parse import parse_qsl, urlencode
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -215,10 +217,64 @@ def me(user=Depends(customer)):
 @app.get("/api/overview")
 def overview(user=Depends(customer)):
     with database() as db:
-        accounts = rows(db.execute("SELECT id,name,clabe,balance FROM accounts WHERE user_id=?", (user["id"],)))
+        accounts = rows(db.execute("SELECT id,name,clabe,balance FROM accounts WHERE user_id=? ORDER BY CASE name WHEN 'Cuenta Patrimonial' THEN 0 ELSE 1 END,id", (user["id"],)))
         movements = rows(db.execute("SELECT t.* FROM transactions t JOIN accounts a ON a.id=t.account_id WHERE a.user_id=? ORDER BY t.created_at DESC LIMIT 8", (user["id"],)))
         cards = rows(db.execute("SELECT id,account_id,last_four,frozen FROM cards WHERE user_id=?", (user["id"],)))
     return {"accounts": accounts, "transactions": movements, "cards": cards}
+
+
+@app.get("/api/accounts/{account_id}/summary")
+def account_summary(account_id: str, user=Depends(customer)):
+    zone = ZoneInfo("America/Mexico_City")
+    now = datetime.now(zone)
+    months = []
+    with database() as db:
+        account = db.execute("SELECT id,name,clabe,balance FROM accounts WHERE id=? AND user_id=? AND team_id=? AND kind='customer'", (account_id, user["id"], user["team_id"])).fetchone()
+        if not account:
+            fail(404, "Cuenta no disponible.")
+        for offset in range(5, -1, -1):
+            year, month = divmod(now.year * 12 + now.month - 1 - offset, 12)
+            next_year, next_month = divmod(year * 12 + month + 1, 12)
+            start = int(datetime(year, month + 1, 1, tzinfo=zone).timestamp())
+            end = int(datetime(next_year, next_month + 1, 1, tzinfo=zone).timestamp())
+            totals = db.execute("SELECT COALESCE(SUM(CASE WHEN amount>0 THEN amount ELSE 0 END),0) income,COALESCE(SUM(CASE WHEN amount<0 THEN -amount ELSE 0 END),0) expenses,COUNT(*) movements FROM transactions WHERE account_id=? AND created_at>=? AND created_at<? AND status='posted'", (account_id, start, end)).fetchone()
+            months.append({"period": f"{year:04d}-{month + 1:02d}", "starts_at": start, **dict(totals)})
+    return {"account": dict(account), "months": months}
+
+
+class Deposit(Input):
+    account_id: str = Field(min_length=36, max_length=36)
+    amount: StrictInt = Field(gt=0, le=1000000000)
+
+
+@app.post("/api/deposits", status_code=201)
+def deposit(data: Deposit, request: Request, user=Depends(customer)):
+    key = request.headers.get("idempotency-key", "")
+    if not re.fullmatch(r"[a-zA-Z0-9-]{16,80}", key):
+        fail(422, "Falta el identificador de operación.")
+    limited("deposit:" + user["id"], 60, 3600)
+    fingerprint = digest(data.model_dump_json())
+    with database() as db:
+        db.execute("BEGIN IMMEDIATE")
+        previous = db.execute("SELECT request_hash,payload FROM deposits WHERE user_id=? AND idempotency_key=?", (user["id"], key)).fetchone()
+        if previous:
+            if previous["request_hash"] != fingerprint:
+                fail(409, "El identificador corresponde a otro depósito.")
+            return json.loads(previous["payload"])
+        account = db.execute("SELECT id,balance FROM accounts WHERE id=? AND user_id=? AND team_id=? AND kind='customer'", (data.account_id, user["id"], user["team_id"])).fetchone()
+        if not account:
+            fail(404, "Cuenta no disponible.")
+        balance = account["balance"] + data.amount
+        if balance > 99999999999:
+            fail(422, "El depósito supera el saldo máximo de la simulación.")
+        identifier, reference, created = str(uuid.uuid4()), "DP" + secrets.token_hex(8).upper(), int(time.time())
+        db.execute("UPDATE accounts SET balance=? WHERE id=? AND user_id=?", (balance, data.account_id, user["id"]))
+        db.execute("INSERT INTO transactions VALUES(?,?,?,?,?,?,?,?)", (str(uuid.uuid4()), user["team_id"], data.account_id, data.amount, "Depósito", reference, created, "posted"))
+        result = {"id": identifier, "reference": reference, "account_id": data.account_id, "amount": data.amount, "balance": balance, "created_at": created, "simulated": True}
+        db.execute("INSERT INTO deposits VALUES(?,?,?,?,?,?,?)", (identifier, user["id"], data.account_id, key, fingerprint, json.dumps(result), created))
+        event(db, user["team_id"], "deposit.simulated", reference)
+        db.commit()
+    return result
 
 
 @app.get("/api/transactions")
@@ -531,12 +587,12 @@ def favicon():
 
 @app.get("/manifest.webmanifest")
 def manifest():
-    return JSONResponse({"name": "Aluranee Bank", "short_name": "Aluranee", "start_url": "/app", "display": "standalone", "background_color": "#f3f1eb", "theme_color": "#102c43", "icons": [{"src": "/assets/app-icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/assets/app-icon-512.png", "sizes": "512x512", "type": "image/png"}]}, media_type="application/manifest+json")
+    return JSONResponse({"id": "/app/", "name": "Aluranee Bank", "short_name": "Aluranee", "start_url": "/app", "scope": "/", "display": "standalone", "background_color": "#f6f7f9", "theme_color": "#f6f7f9", "icons": [{"src": "/assets/app-icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/assets/app-icon-512.png", "sizes": "512x512", "type": "image/png"}]}, media_type="application/manifest+json")
 
 
 @app.get("/{path:path}")
 def frontend(path: str):
-    files = {"app.js": "app.js", "information.js": "information.js", "style.css": "style.css", "config.js": "config.js"}
+    files = {name: name for name in ("app.js", "information.js", "mobile.js", "style.css", "mobile.css", "config.js")}
     if path in files:
         return FileResponse(ROOT / "web" / files[path])
     if not path and json.loads((ROOT / "channel.json").read_text())["default"] == "mobile":

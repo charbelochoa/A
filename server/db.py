@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS beneficiaries(id TEXT PRIMARY KEY,user_id TEXT NOT NU
 CREATE TABLE IF NOT EXISTS transactions(id TEXT PRIMARY KEY,team_id TEXT NOT NULL,account_id TEXT NOT NULL REFERENCES accounts(id),amount INTEGER NOT NULL,description TEXT NOT NULL,reference TEXT NOT NULL,created_at INTEGER NOT NULL,status TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS transactions_account ON transactions(account_id,created_at);
 CREATE TABLE IF NOT EXISTS transfers(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,payload TEXT NOT NULL,UNIQUE(user_id,idempotency_key));
+CREATE TABLE IF NOT EXISTS deposits(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),account_id TEXT NOT NULL REFERENCES accounts(id),idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,payload TEXT NOT NULL,created_at INTEGER NOT NULL,UNIQUE(user_id,idempotency_key));
 CREATE TABLE IF NOT EXISTS cards(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,account_id TEXT NOT NULL,last_four TEXT NOT NULL,frozen INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS tickets(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,subject TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL,document_id TEXT NOT NULL,created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,user_id TEXT,content TEXT NOT NULL);
