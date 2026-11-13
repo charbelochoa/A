@@ -29,3 +29,13 @@ La presentación móvil está disponible bajo `/A/app/` y la vista de teléfono 
 El despliegue inicial mantiene los módulos académicos existentes dentro de la aplicación, separados de la administración de la VM. Los endpoints administrativos no se publican mediante el proxy. El entorno final de custodia con terminal Linux por equipo no está implementado en esta entrega.
 
 El objetivo de seis horas y la capacidad de equipos concurrentes permanecen sin calibrar. El despliegue puede requerir operaciones de instalación, publicación y revisión del estado de los servicios; no requiere ejecutar pruebas de ataque ni las suites de pruebas del proyecto.
+
+## Datos y accesos de la actividad
+
+`scripts/seed_bank.py` prepara el número solicitado de cuentas bancarias sintéticas, conservando los datos existentes y trabajando en lotes. Los clientes sintéticos se excluyen del inicio de sesión y los nuevos registros sintéticos tienen contraseñas inutilizables. Los usuarios participantes se crean por separado y conservan contraseñas individuales con hash scrypt.
+
+La preparación del volumen de datos no inicia la ventana de competición. El estado de generación se conserva en `/var/lib/aluranee/seed-progress.json`. Las credenciales iniciales de participantes permanecen en un archivo privado del directorio de datos, fuera del repositorio y del directorio web.
+
+La clave de organizador permite identificar al host en las herramientas de la aplicación; no corresponde a un usuario con un panel web de administrador. La consulta operativa se realiza mediante SSH y `scripts/manage.py`. El proxy mantiene bloqueada la ruta pública `/api/host/*`.
+
+`scripts/package_release.py` incluye frontend, backend y utilidades operativas en el paquete de instalación. Las bases de datos, registros, configuraciones privadas y credenciales locales no forman parte de ese paquete.

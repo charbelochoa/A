@@ -49,7 +49,8 @@ def event(db, team, action, detail=""):
 
 def create_customer(db, name, email, password, synthetic=False):
     user_id, team = str(uuid.uuid4()), str(uuid.uuid4())
-    db.execute("INSERT INTO users VALUES(?,?,?,?,?,?,?)", (user_id, team, name, email, password_hash(password), int(synthetic), int(time.time())))
+    stored_password = "!" + secrets.token_hex(32) if synthetic else password_hash(password)
+    db.execute("INSERT INTO users VALUES(?,?,?,?,?,?,?)", (user_id, team, name, email, stored_password, int(synthetic), int(time.time())))
     accounts = []
     for kind, balance in [("Cuenta Patrimonial", 14865075), ("Reserva Aluranee", 32500000)]:
         account = str(uuid.uuid4())
