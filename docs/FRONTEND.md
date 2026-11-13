@@ -21,6 +21,8 @@ El diseño parte del HTML de referencia entregado: composición editorial, encab
 | Perfil | `/banca/perfil/` | Nombre, identificador y duración de sesión |
 | Móvil | `/app/` y las mismas secciones bancarias | Navegación inferior y presentación adaptada al teléfono |
 | Más | `/app/mas/` | Movimientos, beneficiarios, atención y perfil |
+| Depósitos | `/app/depositos/` | Importe editable, cuenta propia y confirmación de depósito ficticio |
+| Ingresos y gastos | `/app/ingresos/` | Totales por cuenta y mes, y gráfica de seis meses |
 | Teléfono | `/movil/` | Presentación de la aplicación dentro de un dispositivo |
 | No disponible | Cualquier ruta no reconocida | Página 404 con acceso al portal y ayuda |
 
@@ -30,7 +32,11 @@ El código incluye estados de carga, errores de acceso, conexión o caducidad de
 
 Los enlaces de acceso móvil y escritorio se construyen con la misma ruta base del sitio. Los enlaces, fuentes e imágenes estáticos reciben el prefijo `/A/` durante la preparación de Pages. Los comprobantes se descargan mediante la API autenticada.
 
-La navegación de teléfono usa una isla flotante inspirada en `src/DynamicIsland.tsx` y `src/interface.css` del proyecto AERIS del usuario: superficie oscura, borde fino, esquinas redondeadas y sombra separada del contenido. Mantiene los cinco accesos de la banca, indica la sección activa y respeta el área segura inferior. Incluye variantes de contraste y transparencia reducida y controles accesibles mediante teclado.
+La navegación de teléfono usa una isla flotante inspirada en `src/DynamicIsland.tsx` y `src/interface.css` del proyecto AERIS del usuario: borde fino, esquinas redondeadas y sombra separada del contenido. Mantiene los cinco accesos de la banca, indica la sección activa y respeta el área segura inferior. Incluye variantes de contraste y transparencia reducida y controles accesibles mediante teclado.
+
+La referencia posterior del usuario, `image0.png`, define el inicio de la aplicación: fondo claro, azul profundo, pestañas Destacados y Tus productos, tarjetas blancas con carrusel y el nombre del usuario autenticado. La isla conserva su separación del contenido y adopta la superficie clara y el indicador circular de la nueva referencia. El saldo puede ocultarse y cada tarjeta enlaza a sus movimientos y su resumen de ingresos y gastos. No se incorpora el nombre personal ni la marca bancaria de la imagen como datos fijos.
+
+`web/mobile.js` y `web/mobile.css` contienen la presentación de aplicación. El icono de inicio de iPhone usa el sello PNG existente de Aluranee. El manifiesto inicia en `/A/app/` y declara modo standalone; las etiquetas de Apple establecen icono, nombre y presentación. La instalación requiere que el usuario añada el sitio desde Safari. La aplicación necesita conexión para iniciar sesión y operar; no guarda saldos para operar sin conexión.
 
 ## Variantes
 

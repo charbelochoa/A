@@ -121,6 +121,7 @@ function auth(register = false) {
 const navigation = [['', 'home', 'Inicio'], ['/cuentas', 'accounts', 'Mis cuentas'], ['/transferir', 'transfer', 'Transferencias'], ['/movimientos', 'accounts', 'Movimientos'], ['/tarjetas', 'card', 'Tarjetas'], ['/beneficiarios', 'user', 'Beneficiarios'], ['/atencion', 'support', 'Atención al cliente']];
 
 function shell(title, active, content) {
+  if (mobile) { appShell(title, active, content); return; }
   document.body.className = mobile ? 'mobile banking' : 'banking';
   document.title = title.replace(/[.]$/, '') + ' · Aluranee Bank';
   const initials = state.user.name.split(' ').slice(0, 2).map(s => s[0]).join('');
@@ -141,6 +142,7 @@ function bankCard(card) {
 }
 
 function dashboard() {
+  if (mobile) { appDashboard(); return; }
   const {accounts, transactions, cards} = state.overview;
   const hour = new Date().getHours();
   shell(`${hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches'}, ${esc(state.user.name.split(' ')[0])}.`, '', `<section class="balance-hero"><div><span class="section-number">PATRIMONIO DISPONIBLE</span><h2>${money(accounts.reduce((sum, a) => sum + a.balance, 0))}<small>MXN</small></h2><span class="balance-caption">Todo en su lugar.</span></div><a class="button" href="${base}/transferir">Transferir ${icon('arrow')}</a></section><section class="account-grid">${accounts.map((account, i) => `<a class="account-tile" href="${base}/cuentas"><div><span class="account-mark">A${i + 1}</span>${icon('arrow')}</div><h3>${esc(account.name)}</h3><span class="account-number">•••• ${account.clabe.slice(-4)}</span><strong>${money(account.balance)}</strong><span class="account-tile-caption">Saldo disponible</span></a>`).join('')}</section><div class="dashboard-lower"><section class="panel movements-panel"><div class="panel-heading"><h2>Últimos movimientos</h2><a class="text-arrow" href="${base}/movimientos">Ver todos ${icon('arrow')}</a></div>${movementTable(transactions.slice(0, 5))}</section><aside class="dashboard-aside">${cards[0] ? bankCard(cards[0]) : ''}<a class="service-link" href="${base}/tarjetas">Administra tu tarjeta ${icon('arrow')}</a><a class="support-promo" href="${base}/atencion">${icon('support')}<h3>Cerca de ti.</h3><span>Tu mesa de atención ${icon('arrow')}</span></a></aside></div>`);
@@ -312,6 +314,7 @@ function missingPage() {
 }
 
 async function start() {
+  if (mobile) document.querySelector('meta[name=theme-color]').content = '#f6f7f9';
   if (routePath === '/' && config.defaultChannel === 'mobile') { location.replace(site('/app/')); return; }
   const informationSlug = routePath.slice(1);
   if (window.ALURANEE_INFORMATION && Object.hasOwn(window.ALURANEE_INFORMATION, informationSlug)) { informationPage(informationSlug); return; }
@@ -321,6 +324,7 @@ async function start() {
   const bankingRoot = mobile ? '/app' : '/banca';
   const route = routePath.slice(bankingRoot.length);
   const pages = {'': dashboard, '/cuentas': accountsPage, '/movimientos': transactionsPage, '/transferir': transferPage, '/beneficiarios': beneficiariesPage, '/tarjetas': cardsPage, '/atencion': supportPage, '/perfil': profilePage, '/mas': morePage};
+  if (mobile) Object.assign(pages, {'/ingresos': appIncomePage, '/depositos': appDepositsPage});
   if (!(routePath === bankingRoot || routePath.startsWith(bankingRoot + '/')) || !Object.hasOwn(pages, route)) { missingPage(); return; }
   root.innerHTML = '<main id="main" class="loading"><div class="loading-seal"><img src="/assets/seal.webp" alt="Aluranee Bank"></div><p>Cargando tu banca…</p></main>';
   try {
